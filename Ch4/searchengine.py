@@ -36,6 +36,8 @@ class crawler:
     def addlinkref(self, urlFrom, urlTo, linkText):
         pass
 
+    # test
+    # crawler('').crawl(['http://docs.python-requests.org/en/latest/user/quickstart/'])
     def crawl(self, pages, depth=2):
         for i in range(depth):
             newpages = set()
@@ -64,10 +66,13 @@ class crawler:
             pages = newpages
 
     def createindextables(self):
-        self.con.execute('create tabel urllist(url)')
-        self.con.execute('create tabel urllist(url)')
-        self.con.execute('create tabel urllist(url)')
-        self.con.execute('create tabel urllist(url)')
-        self.con.execute('create tabel urllist(url)')
-
-        # crawler('').crawl(['http://docs.python-requests.org/en/latest/user/quickstart/'])
+        self.con.execute('CREATE TABLE urllist(url)')
+        self.con.execute('CREATE TABLE wordlist(word)')
+        self.con.execute('CREATE TABLE wordlocation(urlid,wordid,location)')
+        self.con.execute('CREATE TABLE link(fromid INTEGER,toid INTEGER)')
+        self.con.execute('CREATE TABLE linkwords(wordid,linkid)')
+        self.con.execute('CREATE INDEX wordiddx ON wordlist(word)')
+        self.con.execute('CREATE INDEX urlidx ON urllist(url)')
+        self.con.execute('CREATE INDEX wordurlidx ON wordlocation(wordid)')
+        self.con.execute('CREATE INDEX urltoidx ON link(toid)')
+        self.con.execute('CREATE INDEX urlfromidx ON link(fromid)')
