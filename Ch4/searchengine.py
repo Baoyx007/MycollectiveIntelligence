@@ -4,6 +4,7 @@ from bs4 import *
 import requests
 from urllib.parse import urljoin
 import sqlite3
+import re
 
 ignorewords = set(['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it'])
 
@@ -19,18 +20,50 @@ class crawler:
         self.con.commit()
 
     def getentryid(self, table, field, value, createnew=True):
-        return None
+        cur = self.con.execute('SELECT ROWID FROM %s WHERE %s=?' % (table, field), (value,))
+        res = cur.fetchone()
+        if not res:
+            cur = self.con.execute('INSERT INTO %s (%s) VALUES (?)' % (table, field), (value,))
+            return cur.lastrowid
+        else:
+            return res[0]
 
     def addtoindex(self, url, soup):
+        if self.isindexed(url): return
         print('indexing %s' % url)
 
+        text = self.gettextonly(soup)
+        words = self.separatewords(text)
+
+        urlid = self.getentryid('urllist', 'url', url)
+
+        for i, word in enumerate(words):
+            if word in ignorewords: continue
+            wordid = self.getentryid('wordlist', 'word', word)
+            self.con.execute('INSERT INTO wordlocation(urlid,wordid,location)'
+                             'VALUES (?,?,?)', (urlid, wordid, i))
+
     def gettextonly(self, soup):
-        return None
+        v = soup.string
+        if not v:
+            c = soup.contents
+            resulttext = ''
+            for t in c:
+                subtext = self.gettextonly(t)
+                resulttext += subtext
+            return resulttext
+        else:
+            return v.strip()
 
     def separatewords(self, text):
-        return None
+        splitter = re.compile(r'\W*')
+        return [s.lower() for s in splitter.split(text) if s != '']
 
     def isindexed(self, url):
+        u = self.con.execute('SELECT ROWID FROM urllist WHERE url=?', (url,)).fetchone()
+        if u:
+            v = self.con.execute('SELECT * FROM wordlocation WHERE urlid=?', (u[0],)).fetchone()
+            if not v: return True
         return False
 
     def addlinkref(self, urlFrom, urlTo, linkText):
