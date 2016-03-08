@@ -4,10 +4,11 @@ __author__ = 'haven'
 
 from Ch4.searchengine import crawler,searcher
 
-# crawler('searchindex.db').createoindextables()
+# crawler('searchindex.db').createindextables()
+
 
 # craw= crawler('searchindex.db')
-# pages =['http://leetcode.com/','https://docs.python.org/3/library/']
+# # pages =['http://leetcode.com/','https://docs.python.org/3/library/']
 # craw.crawl(pages)
 
 e = searcher('searchindex.db')

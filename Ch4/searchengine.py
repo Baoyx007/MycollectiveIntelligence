@@ -125,6 +125,7 @@ class searcher:
         clauselist = ''
         wordids = []
 
+        #根据空格拆分query string
         words = q.split(' ')
         tablenumber = 0
 
