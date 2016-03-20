@@ -12,8 +12,10 @@ ignorewords = set(['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it'])
 class crawler:
     def __init__(self, dbname):
         self.con = sqlite3.connect(dbname)
+        self.cursor = self.con.cursor()
 
     def __del__(self):
+        self.cursor.close()
         self.con.close()
 
     def dbcommit(self):
@@ -98,6 +100,26 @@ class crawler:
             self.dbcommit()
             pages = newpages
 
+    def calculatepagerank(self, iteration=20):
+        self.con.execute('DROP TABLE IF EXISTS pagerank')
+        self.con.execute('CREATE TABLE pagerank(urlid PRIMARY KEY ,score)')
+
+        self.con.execute('INSERT INTO pagerank SELECT ROWID,1.0 FROM urllist')
+        self.dbcommit()
+
+        for i in range(iteration):
+            print('iteration %d' % i)
+            for urlid, in self.con.execute('SELECT ROWID FROM urllist'):
+                pr = 0.15
+                for linker, in self.con.execute('SELECT DISTINCT fromid FROM link WHERE '
+                                                'toid =?', (urlid,)):
+                    linkingpr = self.con.execute('SELECT score FROM pagerank WHERE urlid=?', (linker,)).fetchone()[0]
+                    linkcount = self.con.execute('SELECT count(*) FROM link WHERE fromid=?', (linker,)).fetchone()[0]
+
+                    pr += 0.85 * (linkingpr / linkcount)
+                self.con.execute('UPDATE pagerank SET score=? WHERE urlid=?', (pr, urlid))
+            self.con.commit()
+
     def createindextables(self):
         self.con.execute('CREATE TABLE urllist(url)')
         self.con.execute('CREATE TABLE wordlist(word)')
@@ -125,7 +147,7 @@ class searcher:
         clauselist = ''
         wordids = []
 
-        #根据空格拆分query string
+        # 根据空格拆分query string
         words = q.split(' ')
         tablenumber = 0
 
@@ -144,8 +166,74 @@ class searcher:
                 clauselist += 'w%d.wordid=%d' % (tablenumber, wordid)
                 tablenumber += 1
 
-        fullquery='select %s from %s where %s'%(fieldlist,tablelist,clauselist)
+        fullquery = 'select %s from %s where %s' % (fieldlist, tablelist, clauselist)
         cur = self.con.execute(fullquery)
         rows = [row for row in cur]
 
-        return  rows,wordids
+        return rows, wordids
+
+    def getscoredlist(self, rows, wordids):
+        totalscores = dict((row[0], 0) for row in rows)
+
+        weights = [(1.0, self.locationscore(rows)), (1.0, self.frequencyscore(rows)), (1.0, self.pagerankscore(rows))]
+
+        for (weight, scores) in weights:
+            for url in totalscores:
+                totalscores[url] += weight * scores[url]
+        return totalscores
+
+    def geturlname(self, id):
+        return self.con.execute("SELECT url FROM urllist WHERE rowid=?", (id,)).fetchone()
+
+    def query(self, q):
+        rows, wordids = self.getmatchrows(q)
+        scores = self.getscoredlist(rows, wordids)
+        rankedscores = sorted([(score, url) for (url, score) in scores.items()], reverse=1)
+        for (score, urlid) in rankedscores[0:10]:
+            print('%f\t%s' % (score, self.geturlname(urlid)))
+
+    def normalizescores(self, scores, smallIsBetter=False):
+        vsmall = 0.0001
+        if smallIsBetter:
+            minscore = min(scores.values())
+            return dict((u, minscore / max(c, vsmall)) for (u, c) in scores.items())
+        else:
+            maxscore = max(scores.values())
+            if maxscore == 0: maxscore = vsmall
+            return dict((u, c / maxscore) for (u, c) in scores.items())
+
+    def frequencyscore(self, rows):
+        counts = dict([(row[0], 0) for row in rows])
+        for row in rows: counts[row[0]] += 1
+        return self.normalizescores(counts)
+
+    def locationscore(self, rows):
+        locations = dict([(row[0], 1000000) for row in rows])
+        for row in rows:
+            locsum = sum(row[1:])
+            if locsum < 100000:
+                locations[row[0]] = locsum
+
+        return self.normalizescores(locations, smallIsBetter=True)
+
+    def distancescore(self, rows):
+        if len(rows[0]) < 2: return dict((row[0], 1.0) for row in rows)
+
+        mindistance = dict((row[0], 1000000) for row in rows)
+
+        for row in rows:
+            distance = sum(row[i] - row[i - 1] for i in range(2, len(row)))
+            if distance < 1000000: mindistance[row[0]] = distance
+        return self.normalizescores(mindistance, smallIsBetter=True)
+
+    def inboundlinkscore(self, rows):
+        uniqueruls = set(row[0] for row in rows)
+        inboundcount = dict(
+            self.con.execute('SELECT count(*) FROM link WHERE toid=?;', (u,)).fetchone()[0] for u in uniqueruls)
+        return self.normalizescores(inboundcount)
+
+    def pagerankscore(self, rows):
+        pageranks = dict(
+            [(row[0], self.con.execute('SELECT score FROM pagerank WHERE urlid=?', (row[0],)).fetchone()[0]) for row in
+             rows])
+        return self.normalizescores(pageranks)

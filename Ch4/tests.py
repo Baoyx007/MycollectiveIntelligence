@@ -8,8 +8,13 @@ from Ch4.searchengine import crawler,searcher
 
 
 # craw= crawler('searchindex.db')
+# craw.calculatepagerank(gj)
 # # pages =['http://leetcode.com/','https://docs.python.org/3/library/']
 # craw.crawl(pages)
 
 e = searcher('searchindex.db')
-print(e.getmatchrows('example programming'))
+# print(e.getmatchrows('example programming'))
+
+
+e.query('functional programming')
+# print(e.geturlname(5))
