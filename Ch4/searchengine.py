@@ -5,9 +5,10 @@ import requests
 from urllib.parse import urljoin
 import sqlite3
 import re
+import jieba
 
 ignorewords = set(['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it'])
-
+ignoreurls=set(['xml','atom'])
 
 class crawler:
     def __init__(self, dbname):
@@ -58,8 +59,9 @@ class crawler:
             return v.strip()
 
     def separatewords(self, text):
-        splitter = re.compile(r'\W*')
-        return [s.lower() for s in splitter.split(text) if s != '']
+        #splitter = re.compile(r'\W*')
+        return jieba.lcut_for_search(text)
+        #return [s.lower() for s in splitter.split(text) if s != '']
 
     def isindexed(self, url):
         u = self.con.execute('SELECT ROWID FROM urllist WHERE url=?', (url,)).fetchone()
@@ -74,6 +76,7 @@ class crawler:
     # test
     # crawler('').crawl(['http://docs.python-requests.org/en/latest/user/quickstart/'])
     def crawl(self, pages, depth=2):
+        sppage=set()
         for i in range(depth):
             newpages = set()
             for page in pages:
@@ -95,10 +98,14 @@ class crawler:
                         url = url.split('#')[0]
                         if url[0:4] == 'http' and not self.isindexed(url):
                             newpages.add(url)
+                            # 存档，友链
+                            if re.search('archives|links|page',url):
+                                sppage.add(url)
                         linkText = self.gettextonly(link)
                         self.addlinkref(page, url, linkText)
             self.dbcommit()
             pages = newpages
+        self.crawl(sppage,5)
 
     def calculatepagerank(self, iteration=20):
         self.con.execute('DROP TABLE IF EXISTS pagerank')
@@ -121,6 +128,11 @@ class crawler:
             self.con.commit()
 
     def createindextables(self):
+        self.con.execute('DROP TABLE IF EXISTS urllist')
+        self.con.execute('DROP TABLE IF EXISTS wordlist')
+        self.con.execute('DROP TABLE IF EXISTS wordlocation')
+        self.con.execute('DROP TABLE IF EXISTS link')
+        self.con.execute('DROP TABLE IF EXISTS linkwords')
         self.con.execute('CREATE TABLE urllist(url)')
         self.con.execute('CREATE TABLE wordlist(word)')
         self.con.execute('CREATE TABLE wordlocation(urlid,wordid,location)')
@@ -233,6 +245,7 @@ class searcher:
         return self.normalizescores(inboundcount)
 
     def pagerankscore(self, rows):
+
         pageranks = dict(
             [(row[0], self.con.execute('SELECT score FROM pagerank WHERE urlid=?', (row[0],)).fetchone()[0]) for row in
              rows])

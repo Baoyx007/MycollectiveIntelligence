@@ -7,14 +7,12 @@ from Ch4.searchengine import crawler,searcher
 # crawler('searchindex.db').createindextables()
 
 
-# craw= crawler('searchindex.db')
-# craw.calculatepagerank(gj)
-# # pages =['http://leetcode.com/','https://docs.python.org/3/library/']
-# craw.crawl(pages)
+craw= crawler('searchindex.db')
+craw.createindextables()
+pages =['http://codepub.cn/']
+craw.crawl(pages)
+# craw.calculatepagerank()
 
-e = searcher('searchindex.db')
-# print(e.getmatchrows('example programming'))
-
-
-e.query('functional programming')
+# e = searcher('searchindex.db')
+# e.query('反射')
 # print(e.geturlname(5))
